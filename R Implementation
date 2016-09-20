@@ -1,0 +1,128 @@
+setwd("/Users/data_sci/data/Walmart/")
+getwd()
+train<-read.csv("train-3.csv",stringsAsFactors=FALSE)
+test_df<-read.csv("test.csv",stringsAsFactors=FALSE)
+train1 <- na.omit(train)
+train<-train1
+train$TripType<-as.factor(train$TripType)
+train$Weekday<-as.factor(train$Weekday)
+train$DepartmentDescription=as.factor(train$DepartmentDescription)
+train$Upc=as.factor(train$Upc)
+train$FinelineNumber=as.factor(train$FinelineNumber)
+table(train$TripType)
+test_df$Weekday<-as.factor(test_df$Weekday)
+test_df$DepartmentDescription=as.factor(test_df$DepartmentDescription)
+test_df$Upc=as.factor(test_df$Upc)
+test_df$FinelineNumber=as.factor(test_df$FinelineNumber)
+
+
+#tapply(train$ScanCount,train$Weekday,min,na.rm=TRUE)
+str(train)
+summary(train)
+library(doBy)
+#Identifying the best value for weight
+train_summary<-summaryBy(ScanCount~VisitNumber,data=train,FUN=list(sum))
+names(train_summary)<-c("VisitNumber","ScanCount_sum")
+test_summary<-summaryBy(ScanCount~VisitNumber,data=test_df,FUN=list(sum))
+names(test_summary)<-c("VisitNumber","ScanCount_sum")
+Fine_cnt<-count(train,c('VisitNumber','FinelineNumber'))
+Fine_cnt_by_visit<-count(Fine_cnt,'VisitNumber')
+names(Fine_cnt_by_visit)<-c('VisitNumber','prod_categ_cnt')
+Fine_cnt_test<-count(test_df,c('VisitNumber','FinelineNumber'))
+Fine_cnt_by_visit_test<-count(Fine_cnt_test,'VisitNumber')
+names(Fine_cnt_by_visit_test)<-c('VisitNumber','prod_categ_cnt')
+
+
+library(sqldf)
+DF<-sqldf('select a.*,b.ScanCount_sum as ScanCount_sum,c.prod_categ_cnt 
+           from train a join 
+           train_summary b join Fine_cnt_by_visit c 
+           on a.VisitNumber=b.VisitNumber and
+              a.VisitNumber=c.VisitNumber')
+train<-DF
+
+
+DF_test<-sqldf('select a.*,b.ScanCount_sum as ScanCount_sum,c.prod_categ_cnt 
+            from test_df a join 
+           test_summary b join Fine_cnt_by_visit_test c 
+           on a.VisitNumber=b.VisitNumber and
+          a.VisitNumber=c.VisitNumber')
+test_df<-DF_test
+#names(test_df$freq)<-"prod_categ_cnt"
+
+library(caTools)
+#library(VGAM)
+set.seed(88)
+split=sample.split(train$TripType,SplitRatio=0.75)
+train2=subset(train,split==TRUE)
+test2=subset(train,split==FALSE)
+nrow(train2)
+nrow(test2)
+library(nnet)
+mod<-multinom(TripType~Weekday+ScanCount+ScanCount_sum+DepartmentDescription+
+                prod_categ_cnt,train2,MaxNWts = 5000)
+levels(test_df$DepartmentDescription) = levels(train2$DepartmentDescription)
+train_pred<-predict(mod,train2)
+#pred<-predict(mod)
+pred<-predict(mod,test_df)
+final <- data.frame(test_df)
+names(final)[1]<-"VisitNumber"
+library(dummies)
+dummy1<-dummy.data.frame(as.data.frame(pred))
+names_dummy<-names(dummy1)
+names(dummy1)<-sub("pred","TripType_",names_dummy)
+#names(dummy1)<-c("TripType_3","TripType_4","TripType_7","TripType_8",
+#                 "TripType_9","TripType_23","TripType_24","TripType_31",
+#                 "TripType_35","TripType_38","TripType_39",
+#                 "TripType_40","TripType_999")
+final$TripType_3=dummy1$TripType_3
+final$TripType_4=dummy1$TripType_4
+final$TripType_5=dummy1$TripType_5
+final$TripType_6=dummy1$TripType_6
+final$TripType_7=dummy1$TripType_7
+final$TripType_8=dummy1$TripType_8
+final$TripType_9=dummy1$TripType_9
+final$TripType_12=dummy1$TripType_12
+final$TripType_14=dummy1$TripType_14
+final$TripType_15=dummy1$TripType_15
+final$TripType_18=dummy1$TripType_18
+final$TripType_19=dummy1$TripType_19
+final$TripType_20=dummy1$TripType_20
+final$TripType_21=dummy1$TripType_21
+final$TripType_22=dummy1$TripType_22
+final$TripType_23=dummy1$TripType_23
+final$TripType_24=dummy1$TripType_24
+final$TripType_25=dummy1$TripType_25
+final$TripType_26=dummy1$TripType_26
+final$TripType_27=dummy1$TripType_27
+final$TripType_28=dummy1$TripType_28
+final$TripType_29=dummy1$TripType_29
+final$TripType_30=dummy1$TripType_30
+final$TripType_31=dummy1$TripType_31
+final$TripType_32=dummy1$TripType_32
+final$TripType_33=dummy1$TripType_33
+final$TripType_34=dummy1$TripType_34
+final$TripType_35=dummy1$TripType_35
+final$TripType_36=dummy1$TripType_36
+final$TripType_37=dummy1$TripType_37
+final$TripType_38=0
+final$TripType_39=dummy1$TripType_39
+final$TripType_40=dummy1$TripType_40
+final$TripType_41=dummy1$TripType_41
+final$TripType_42=dummy1$TripType_42
+final$TripType_43=dummy1$TripType_43
+final$TripType_44=dummy1$TripType_44
+final$TripType_999=dummy1$TripType_999
+final1 <- data.frame(final)
+final2<-final1[unique(final1[,1]),] 
+final2$VisitNumber=NULL
+final2$Weekday=NULL
+final2$Upc=NULL
+final2$ScanCount=NULL
+final2$DepartmentDescription=NULL
+final2$FinelineNumber=NULL
+final2$ScanCount_sum=NULL
+final2$prod_categ_cnt=NULL
+#names(final2)[1]<-"VisitNumber"
+write.csv(final2,file='final_walmart.csv')
+#####################################
